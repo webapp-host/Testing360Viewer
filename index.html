@@ -1,48 +1,35 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>360 Existing / Proposed Viewer</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>360 Site Viewer + ArcGIS Map</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+<link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/light/main.css">
 <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+<script src="https://js.arcgis.com/4.31/"></script>
 <style>
-html,body{height:100%;margin:0;font-family:Arial,sans-serif;background:#111}#app{height:100%;display:flex;flex-direction:column}#viewer{flex:1;min-height:0}.bar{height:72px;background:#fff;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 -2px 12px #0002;z-index:2}.btn{border:1px solid #bbb;background:#fff;padding:11px 22px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer}.btn.active{background:#28628e;border-color:#28628e;color:#fff}.label{position:absolute;top:16px;left:16px;z-index:3;background:#000a;color:#fff;padding:8px 12px;border-radius:6px;font-size:13px;letter-spacing:.03em}.hint{position:absolute;right:16px;top:16px;z-index:3;background:#0009;color:#fff;padding:8px 12px;border-radius:6px;font-size:12px}@media(max-width:600px){.hint{display:none}.bar{height:64px}.btn{padding:10px 18px}}
+html,body,#app{height:100%;margin:0;font-family:Arial,sans-serif}#app{display:flex;flex-direction:column;background:#111}.workspace{flex:1;min-height:0;display:flex}#viewer{width:70%}#map{width:30%;min-width:300px}.bar{height:72px;background:#fff;display:flex;align-items:center;justify-content:center;gap:10px}.btn{border:1px solid #bbb;background:#fff;padding:11px 22px;border-radius:999px;font-weight:700;cursor:pointer}.btn.active{background:#28628e;border-color:#28628e;color:#fff}.label{position:absolute;top:16px;left:16px;z-index:5;background:#000a;color:#fff;padding:8px 12px;border-radius:6px;font-size:13px}.maplabel{position:absolute;right:16px;top:16px;z-index:5;background:#fff;color:#222;padding:7px 10px;border-radius:5px;box-shadow:0 1px 5px #0003;font-size:12px}@media(max-width:800px){.workspace{flex-direction:column}#viewer{width:100%;height:68%}#map{width:100%;height:32%;min-width:0}.maplabel{display:none}.bar{height:64px}}
 </style>
 </head>
-<body>
-<div id="app">
-  <div class="label" id="conditionLabel">EXISTING</div>
-  <div class="hint">Drag to look around • Scroll to zoom</div>
-  <div id="viewer"></div>
-  <div class="bar">
-    <button class="btn active" id="existingBtn">EXISTING</button>
-    <button class="btn" id="proposedBtn">PROPOSED</button>
-  </div>
+<body><div id="app">
+<div class="label" id="conditionLabel">EXISTING</div><div class="maplabel">Camera location + live view cone</div>
+<div class="workspace"><div id="viewer"></div><div id="map"></div></div>
+<div class="bar"><button class="btn active" id="existingBtn">EXISTING</button><button class="btn" id="proposedBtn">PROPOSED</button></div>
 </div>
 <script>
-const scenes={
- existing:{type:'equirectangular',panorama:'DZL__Location C_Existing.jpg'},
- proposed:{type:'equirectangular',panorama:'DZL__Location C_Proposed.jpg'}
-};
-const viewer=pannellum.viewer('viewer',{
- default:{firstScene:'existing',sceneFadeDuration:250,autoLoad:true,showControls:true},
- scenes
-});
+const SITE={lat:38.609321,lon:-81.842066};
+const scenes={existing:{type:'equirectangular',panorama:'DZL__Location C_Existing.jpg'},proposed:{type:'equirectangular',panorama:'DZL__Location C_Proposed.jpg'}};
+const pano=pannellum.viewer('viewer',{default:{firstScene:'existing',sceneFadeDuration:200,autoLoad:true,showControls:true},scenes});
 let active='existing';
-function changeCondition(next){
- if(next===active)return;
- const yaw=viewer.getYaw();
- const pitch=viewer.getPitch();
- const hfov=viewer.getHfov();
- viewer.loadScene(next,pitch,yaw,hfov);
- active=next;
- document.getElementById('existingBtn').classList.toggle('active',next==='existing');
- document.getElementById('proposedBtn').classList.toggle('active',next==='proposed');
- document.getElementById('conditionLabel').textContent=next.toUpperCase();
-}
-document.getElementById('existingBtn').addEventListener('click',()=>changeCondition('existing'));
-document.getElementById('proposedBtn').addEventListener('click',()=>changeCondition('proposed'));
-</script>
-</body>
-</html>
+function switchCondition(next){if(next===active)return;const yaw=pano.getYaw(),pitch=pano.getPitch(),hfov=pano.getHfov();pano.loadScene(next,pitch,yaw,hfov);active=next;existingBtn.classList.toggle('active',next==='existing');proposedBtn.classList.toggle('active',next==='proposed');conditionLabel.textContent=next.toUpperCase();}
+existingBtn.onclick=()=>switchCondition('existing');proposedBtn.onclick=()=>switchCondition('proposed');
+require(['esri/Map','esri/views/MapView','esri/layers/GraphicsLayer','esri/Graphic','esri/geometry/Polygon'],(Map,MapView,GraphicsLayer,Graphic,Polygon)=>{
+ const layer=new GraphicsLayer(); const map=new Map({basemap:'satellite',layers:[layer]});
+ const mv=new MapView({container:'map',map,center:[SITE.lon,SITE.lat],zoom:18,ui:{components:['zoom','attribution']}});
+ const point=new Graphic({geometry:{type:'point',longitude:SITE.lon,latitude:SITE.lat},symbol:{type:'simple-marker',size:10,color:'#fff',outline:{color:'#28628e',width:3}}}); layer.add(point);
+ const cone=new Graphic({symbol:{type:'simple-fill',color:[40,98,142,.28],outline:{color:'#28628e',width:2}}}); layer.add(cone);
+ function dest(lon,lat,bearing,meters){const R=6378137,d=meters/R,b=bearing*Math.PI/180,p1=lat*Math.PI/180,l1=lon*Math.PI/180;const p2=Math.asin(Math.sin(p1)*Math.cos(d)+Math.cos(p1)*Math.sin(d)*Math.cos(b));const l2=l1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(p1),Math.cos(d)-Math.sin(p1)*Math.sin(p2));return [l2*180/Math.PI,p2*180/Math.PI];}
+ function updateCone(){if(!pano.isLoaded())return;const heading=((pano.getYaw()%360)+360)%360,fov=Math.min(pano.getHfov(),120),dist=140;const left=dest(SITE.lon,SITE.lat,heading-fov/2,dist),right=dest(SITE.lon,SITE.lat,heading+fov/2,dist);cone.geometry=new Polygon({spatialReference:{wkid:4326},rings:[[[SITE.lon,SITE.lat],left,right,[SITE.lon,SITE.lat]]]});requestAnimationFrame(updateCone);}
+ pano.on('load',()=>requestAnimationFrame(updateCone));
+});
+</script></body></html>
